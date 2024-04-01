@@ -92,23 +92,42 @@ app.command(command)(ack=respond_to_slack_within_3_seconds, lazy=[process_reques
 
 @app.command("/bus")
 def bus_command(ack, body):
-    is_route_9_active = doublemap.is_route_active(route_9_id)
-    is_route_5_active = doublemap.is_route_active(route_5_id)
+    route_9 = doublemap.get_route(route_9_id)
+    route_5 = doublemap.get_route(route_5_id)
+    is_route_9_active = route_9["active"]
+    is_route_5_active = route_5["active"]
     if body.get("text") is None or body["text"] == "":
         if is_route_5_active:
             res = "CDL Stop: Next bus in "
             cdl_etas = doublemap.get_etas(cdl_stop_id)
             for eta in cdl_etas:
-                res += f"{eta['avg']} minutes, "
-            res = res[:-2]
+                last_stop_id = doublemap.get_last_stop(eta["bus_id"])
+                last_stop = "Unknown"
+                stops_left = 0
+                if last_stop_id == 81:
+                    last_stop = "CDL"
+                    stops_left = 4
+                elif last_stop_id == 95:
+                    last_stop = "9 at Central"
+                    stops_left = 3
+                elif last_stop_id == 29:
+                    last_stop = "Village at Science Dr"
+                    stops_left = 2
+                elif last_stop_id == 30:
+                    last_stop = "Research Pavilion"
+                    stops_left = 1
+                elif last_stop_id == 31:
+                    last_stop = "UCF"
+                    stops_left = 0
+                res += f"\n\t{eta['avg']} minutes, last stop: {last_stop}, {stops_left} stops left"
         else:
             res = "Route 5 is not active"
         if is_route_9_active:
             pavilion_etas = doublemap.get_etas(research_pavilion_stop_id)
             res += "\nResearch Pavilion Stop: Next bus in "
             for eta in pavilion_etas:
-                res += f"{eta['avg']} minutes, "
-            res = res[:-2]
+                last_stop = doublemap.get_last_stop(eta["bus_id"])
+                res += f"\n\t{eta['avg']} minutes, last stop: {last_stop}"
         else:
             res += "\nRoute 9 is not active"
     else:
