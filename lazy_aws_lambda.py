@@ -1,5 +1,4 @@
 import logging
-import time
 
 from slack_bolt import App
 from slack_bolt.adapter.aws_lambda import SlackRequestHandler
@@ -15,80 +14,10 @@ research_pavilion_stop_id = 31
 # process_before_response must be True when running on FaaS
 app = App(process_before_response=True)
 
-@app.event("app_home_opened")
-def update_home_tab(client, event, logger):
-  try:
-    # views.publish is the method that your app uses to push a view to the Home tab
-    client.views_publish(
-      # the user that opened your app's app home
-      user_id=event["user"],
-      # the view object that appears in the app home
-      view={
-        "type": "home",
-        "callback_id": "home_view",
-
-        # body of the view
-        "blocks": [
-          {
-            "type": "section",
-            "text": {
-              "type": "mrkdwn",
-              "text": "*Welcome to your _App's Home tab_* :tada:"
-            }
-          },
-          {
-            "type": "divider"
-          },
-          {
-            "type": "section",
-            "text": {
-              "type": "mrkdwn",
-              "text": "This button won't do much for now but you can set up a listener for it using the `actions()` method and passing its unique `action_id`. See an example in the `examples` folder within your Bolt app."
-            }
-          },
-          {
-            "type": "actions",
-            "elements": [
-              {
-                "type": "button",
-                "text": {
-                  "type": "plain_text",
-                  "text": "Click me!"
-                }
-              }
-            ]
-          }
-        ]
-      }
-    )
-
-  except Exception as e:
-    logger.error(f"Error publishing home tab: {e}")
-
-@app.middleware  # or app.use(log_request)
+@app.middleware
 def log_request(logger, body, next):
     logger.debug(body)
     return next()
-
-
-command = "/hello-bolt-python-lambda"
-
-
-def respond_to_slack_within_3_seconds(body, ack):
-    if body.get("text") is None:
-        ack(f":x: Usage: {command} (description here)")
-    else:
-        title = body["text"]
-        ack(f"Accepted! (task: {title})")
-
-
-def process_request(respond, body):
-    time.sleep(5)
-    title = body["text"]
-    respond(f"Completed! (task: {title})")
-
-
-app.command(command)(ack=respond_to_slack_within_3_seconds, lazy=[process_request])
 
 @app.command("/bus")
 def bus_command(ack, body):
@@ -101,10 +30,10 @@ def bus_command(ack, body):
             res = "CDL Stop: Next bus in "
             cdl_etas = doublemap.get_etas(cdl_stop_id)
             for eta in cdl_etas:
-                last_stop_id = doublemap.get_last_stop(eta["bus_id"])
+                last_stop_id = doublemap.get_last_stop_info(eta["bus_id"])['id']
                 last_stop = "Unknown"
                 stops_left = 0
-                if last_stop_id == 81:
+                if last_stop_id == 82:
                     last_stop = "CDL"
                     stops_left = 4
                 elif last_stop_id == 95:
@@ -126,8 +55,8 @@ def bus_command(ack, body):
             pavilion_etas = doublemap.get_etas(research_pavilion_stop_id)
             res += "\nResearch Pavilion Stop: Next bus in "
             for eta in pavilion_etas:
-                last_stop = doublemap.get_last_stop(eta["bus_id"])
-                res += f"\n\t{eta['avg']} minutes, last stop: {last_stop}"
+                last_stop = doublemap.get_last_stop_info(eta["bus_id"])
+                res += f"\n\t{eta['avg']} minutes, last stop: {last_stop['name']}"
         else:
             res += "\nRoute 9 is not active"
     else:
@@ -151,11 +80,3 @@ logging.basicConfig(format="%(asctime)s %(message)s", level=logging.DEBUG)
 def handler(event, context):
     slack_handler = SlackRequestHandler(app=app)
     return slack_handler.handle(event, context)
-
-
-# export SLACK_SIGNING_SECRET=***
-# export SLACK_BOT_TOKEN=xoxb-***
-
-# rm -rf vendor && cp -pr ../../src/* vendor/
-# pip install python-lambda
-# lambda deploy --config-file aws_lambda_config.yaml --requirements requirements.txt
